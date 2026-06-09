@@ -1,4 +1,5 @@
 package com.chembal.minesweeper.core;
+import java.security.SecureRandom;
 import java.util.Random;
 
 public class Field {
@@ -93,8 +94,7 @@ public class Field {
 	public boolean isStarted() { return started; }
 
 	private void placeMine() {
-		// Don't collide with other randomizers.
-		Random r = new Random((long) (System.currentTimeMillis() / 37));
+		Random r = new SecureRandom();
 		boolean placed = false;
 		int x;
 		int y;

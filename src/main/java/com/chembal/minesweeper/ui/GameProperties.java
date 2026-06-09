@@ -21,8 +21,7 @@ public class GameProperties {
 
 
 	public GameProperties() {
-		try {
-			InputStream input = new FileInputStream("config.properties");
+		try (InputStream input = new FileInputStream("config.properties")) {
 			Properties p = new Properties();
 			p.load(input);
 
@@ -49,7 +48,7 @@ public class GameProperties {
 	}
 
 	public void store() {
-		try {
+		try (FileOutputStream out = new FileOutputStream("config.properties")) {
 			Properties p = new Properties();
 			p.setProperty("game.help-level", "" + helpLevel);
 			p.setProperty("ui.auto-speed", "" + autoSpeed);
@@ -60,9 +59,7 @@ public class GameProperties {
 			p.setProperty("minefield.width", "" + customWidth);
 			p.setProperty("minefield.height", "" + customHeight);
 			p.setProperty("minefield.mine-count", "" + customMines);
-			FileOutputStream out = new FileOutputStream("config.properties");
 			p.store(out," --- Minesweeper++ ---");
-			out.close();
 		} catch (Exception e) {
 			// Ignore problem - defaults will be used next time, and that's fine.
 		}
