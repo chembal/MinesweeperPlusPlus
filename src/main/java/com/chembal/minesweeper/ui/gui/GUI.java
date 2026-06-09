@@ -293,10 +293,7 @@ public class GUI extends JFrame implements ActionListener, FieldListener, GameBo
 					} else {
 						field.mark(p.x,p.y);
 					}
-					int helpLevel = props.getHelpLevel();
-					if (helpLevel == 1) testAllAssumptions();
-					if (helpLevel == 2) ai.doObvious();
-					if (helpLevel == 3) { field.setForcedDelay(0); ai.play(true); }
+					applyAIHelp();
 					noUpdateBoard = false;
 					boardChanged();
 				}
@@ -318,13 +315,17 @@ public class GUI extends JFrame implements ActionListener, FieldListener, GameBo
 		try {
 			noUpdateBoard = true;
 			field.guess(x,y);
-			int helpLevel = props.getHelpLevel();
-			if (helpLevel == 1) testAllAssumptions();
-			if (helpLevel == 2) ai.doObvious();
-			if (helpLevel == 3) { field.setForcedDelay(0); ai.play(true); }
+			applyAIHelp();
 			noUpdateBoard = false;
 			boardChanged();
 		} catch (Exception e) {}
+	}
+
+	private void applyAIHelp() {
+		int helpLevel = props.getHelpLevel();
+		if (helpLevel == 1) testAllAssumptions();
+		if (helpLevel == 2) ai.doObvious();
+		if (helpLevel == 3) { field.setForcedDelay(0); ai.play(true); }
 	}
 	
 	private void testAllAssumptions() {

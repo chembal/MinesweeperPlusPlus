@@ -10,7 +10,12 @@ import java.util.Vector;
 public class LogicalAI extends AI implements UserHelper {
 
 	private boolean noGuessing = false;
-	
+
+	@FunctionalInterface
+	private interface SquareOperation {
+		void execute(int x, int y) throws Exception;
+	}
+
 	public LogicalAI(Field field) {
 		super(field);
 	}
@@ -119,7 +124,7 @@ public class LogicalAI extends AI implements UserHelper {
 				return false;
 			else {
 				int minesUnexplained = field.getNumberMinedAboutSquare(x,y) - field.getNumberMarkedAboutSquare(x,y);
-				int unexplainedSquaresNotInFact = getUnexplainedSquaresNotInFact(x,y,f);
+				int unexplainedSquaresNotInFact = countUnexplainedNeighbors(x, y, f);
 				if (minesUnexplained == (unexplainedSquaresNotInFact + f.numInPoints)) {
 					if (minesUnexplained > f.numInPoints) {
 						return true;
@@ -134,38 +139,37 @@ public class LogicalAI extends AI implements UserHelper {
 		}
 	}
 
-	private int getUnexplainedSquaresNotInFact(int x, int y, Fact f) {
-		int numOfSquares = 0;
-		
-		try {
-			for (int xoffset = -1; xoffset <= 1; xoffset++)
-				for (int yoffset = -1; yoffset <= 1; yoffset++) {
-					if (field.squareExists((x + xoffset),(y + yoffset))) {
-						if (!field.isKnown((x + xoffset),(y + yoffset)) && !field.isMarked((x + xoffset),(y + yoffset)) && !explainedInFact((x + xoffset),(y + yoffset),f)) {
-							numOfSquares++;
-						}
-					}
-				}
-		} catch (Exception e) { e.printStackTrace(); }
-		return numOfSquares;
-	}
-
-	private boolean markUnexplained(int x, int y, Fact f) {
+	/**
+	 * Iterates over neighbors of (x,y) that are unknown, unmarked, and not explained
+	 * by the given fact. If excludeFact is null, the "explained in fact" check is skipped.
+	 * Returns true if the operation was applied to at least one neighbor.
+	 */
+	private boolean forEachUnknownUnmarkedNeighbor(int x, int y, Fact excludeFact, SquareOperation operation) {
 		boolean changed = false;
-		
 		try {
 			for (int xoffset = -1; xoffset <= 1; xoffset++)
 				for (int yoffset = -1; yoffset <= 1; yoffset++) {
-					if (field.squareExists((x + xoffset),(y + yoffset))) {
-						if (!field.isKnown((x + xoffset),(y + yoffset)) && !explainedInFact((x + xoffset),(y + yoffset),f) && !field.isMarked((x + xoffset),(y + yoffset))) {
-							field.mark((x + xoffset),(y + yoffset));
+					int nx = x + xoffset;
+					int ny = y + yoffset;
+					if (field.squareExists(nx, ny) && !field.isKnown(nx, ny) && !field.isMarked(nx, ny)) {
+						if (excludeFact == null || !explainedInFact(nx, ny, excludeFact)) {
+							operation.execute(nx, ny);
 							changed = true;
 						}
 					}
 				}
 		} catch (Exception e) { e.printStackTrace(); }
-
 		return changed;
+	}
+
+	private int countUnexplainedNeighbors(int x, int y, Fact excludeFact) {
+		int[] count = {0};
+		forEachUnknownUnmarkedNeighbor(x, y, excludeFact, (nx, ny) -> count[0]++);
+		return count[0];
+	}
+
+	private boolean markUnexplained(int x, int y, Fact f) {
+		return forEachUnknownUnmarkedNeighbor(x, y, f, (nx, ny) -> field.mark(nx, ny));
 	}
 
 	private boolean explainedInFact(int x, int y, Fact f) {
@@ -179,21 +183,7 @@ public class LogicalAI extends AI implements UserHelper {
 	}
 
 	private boolean guessUnexplained(int x, int y, Fact f) {
-		boolean changed = false;
-
-		try {
-			for (int xoffset = -1; xoffset <= 1; xoffset++)
-				for (int yoffset = -1; yoffset <= 1; yoffset++) {
-					if (field.squareExists((x + xoffset),(y + yoffset))) {
-						if (!field.isKnown((x + xoffset),(y + yoffset)) && !explainedInFact((x + xoffset),(y + yoffset),f) && !field.isMarked((x + xoffset),(y + yoffset))) {
-							field.guess((x + xoffset),(y + yoffset));
-							changed = true;
-						}
-					}
-				}
-		} catch (Exception e) { e.printStackTrace(); }
-
-		return changed;
+		return forEachUnknownUnmarkedNeighbor(x, y, f, (nx, ny) -> field.guess(nx, ny));
 	}
 
 	private void makeProbabilityBasedGuess() {
@@ -261,14 +251,7 @@ public class LogicalAI extends AI implements UserHelper {
 
 		try {
 			fact.numInPoints = field.getNumberMinedAboutSquare(x,y) - field.getNumberMarkedAboutSquare(x,y);
-			for (int xoffset = -1; xoffset <= 1; xoffset++)
-				for (int yoffset = -1; yoffset <= 1; yoffset++) {
-					if (field.squareExists((x + xoffset),(y + yoffset))) {
-						if (!field.isKnown((x + xoffset),(y + yoffset)) && !field.isMarked((x + xoffset),(y + yoffset))) {
-							fact.points.add(new Point((x + xoffset),(y + yoffset)));
-						}
-					}
-				}
+			forEachUnknownUnmarkedNeighbor(x, y, null, (nx, ny) -> fact.points.add(new Point(nx, ny)));
 		} catch (Exception e) { e.printStackTrace(); }
 		if (fact.numInPoints > 0) facts.add(fact);
 	}
