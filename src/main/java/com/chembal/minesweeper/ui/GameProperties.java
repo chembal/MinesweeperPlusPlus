@@ -1,12 +1,18 @@
 package com.chembal.minesweeper.ui;
 
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.util.Properties;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class GameProperties {
+
+	private static final Logger LOGGER = Logger.getLogger(GameProperties.class.getName());
 
 	private int helpLevel = 0;
 	private int autoSpeed = 3;
@@ -34,8 +40,12 @@ public class GameProperties {
 			customWidth = getConstrainedIntProperty(p, "minefield.width", 1, 100);
 			customHeight = getConstrainedIntProperty(p, "minefield.height", 1, 100);
 			customMines = getConstrainedIntProperty(p, "minefield.mine-count", 1, 100);
-		} catch (Exception e) {
-			// Use defaults
+		} catch (FileNotFoundException e) {
+			LOGGER.log(Level.INFO, "config.properties not found, using defaults");
+		} catch (IOException e) {
+			LOGGER.log(Level.WARNING, "Failed to read config.properties, using defaults", e);
+		} catch (NumberFormatException | NullPointerException e) {
+			LOGGER.log(Level.WARNING, "Invalid value in config.properties, using defaults for remaining fields", e);
 		}
 	}
 
@@ -60,8 +70,8 @@ public class GameProperties {
 			p.setProperty("minefield.height", "" + customHeight);
 			p.setProperty("minefield.mine-count", "" + customMines);
 			p.store(out," --- Minesweeper++ ---");
-		} catch (Exception e) {
-			// Ignore problem - defaults will be used next time, and that's fine.
+		} catch (IOException e) {
+			LOGGER.log(Level.WARNING, "Failed to save config.properties", e);
 		}
 	}
 

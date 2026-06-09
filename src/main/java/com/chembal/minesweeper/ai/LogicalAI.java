@@ -1,13 +1,20 @@
 package com.chembal.minesweeper.ai;
 
+import com.chembal.minesweeper.core.DeadException;
 import com.chembal.minesweeper.core.Field;
+import com.chembal.minesweeper.core.NoSuchSquareException;
+import com.chembal.minesweeper.core.ValueUnknownException;
 
 import java.awt.Point;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Vector;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class LogicalAI extends AI implements UserHelper {
+
+	private static final Logger LOGGER = Logger.getLogger(LogicalAI.class.getName());
 
 	private boolean noGuessing = false;
 
@@ -83,7 +90,10 @@ public class LogicalAI extends AI implements UserHelper {
 		
 		try {
 			if (!field.isKnown(x,y) || field.isMarked(x,y)) return false;
-		} catch (Exception ex) { ex.printStackTrace(); }
+		} catch (NoSuchSquareException ex) {
+			LOGGER.log(Level.WARNING, "Invalid square ({0},{1}) in useFacts", new Object[]{x, y});
+			return false;
+		}
 		
 		for (Fact f : facts) {
 			// If a fact explains all remaining mines, guess the rest.
@@ -112,8 +122,8 @@ public class LogicalAI extends AI implements UserHelper {
 				return false;
 			else
 				return (f.numInPoints == (field.getNumberMinedAboutSquare(x,y) - field.getNumberMarkedAboutSquare(x,y)));
-		} catch (Exception e) {
-			e.printStackTrace();
+		} catch (NoSuchSquareException | ValueUnknownException e) {
+			LOGGER.log(Level.FINE, "Could not evaluate fact at ({0},{1})", new Object[]{x, y});
 			return false;
 		}
 	}
@@ -133,8 +143,8 @@ public class LogicalAI extends AI implements UserHelper {
 					return false;
 				}
 			}
-		} catch (Exception e) {
-			e.printStackTrace();
+		} catch (NoSuchSquareException | ValueUnknownException e) {
+			LOGGER.log(Level.FINE, "Could not evaluate unexplained mines at ({0},{1})", new Object[]{x, y});
 			return false;
 		}
 	}
@@ -158,7 +168,13 @@ public class LogicalAI extends AI implements UserHelper {
 						}
 					}
 				}
-		} catch (Exception e) { e.printStackTrace(); }
+		} catch (NoSuchSquareException e) {
+			LOGGER.log(Level.WARNING, "Invalid square in neighbor iteration near ({0},{1})", new Object[]{x, y});
+		} catch (DeadException e) {
+			LOGGER.log(Level.FINE, "Game ended during neighbor operation near ({0},{1})", new Object[]{x, y});
+		} catch (Exception e) {
+			LOGGER.log(Level.WARNING, "Unexpected error in neighbor iteration near ({0},{1})", new Object[]{x, y});
+		}
 		return changed;
 	}
 
@@ -195,8 +211,10 @@ public class LogicalAI extends AI implements UserHelper {
 			} else {
 				field.guess(p.x,p.y);
 			}
-		} catch (Exception e) {
-			e.printStackTrace();
+		} catch (NoSuchSquareException e) {
+			LOGGER.log(Level.WARNING, "Probability-based guess targeted non-existent square", e);
+		} catch (DeadException e) {
+			LOGGER.log(Level.FINE, "Probability-based guess attempted on dead field", e);
 		}
 	}
 
@@ -237,8 +255,8 @@ public class LogicalAI extends AI implements UserHelper {
 					if (field.isKnown(x,y)) {
 						addFactForSquare(facts,x,y);
 					}
-		} catch (Exception e) {
-			e.printStackTrace();
+		} catch (NoSuchSquareException e) {
+			LOGGER.log(Level.WARNING, "Error gathering known facts", e);
 		}
 		
 		
@@ -252,7 +270,9 @@ public class LogicalAI extends AI implements UserHelper {
 		try {
 			fact.numInPoints = field.getNumberMinedAboutSquare(x,y) - field.getNumberMarkedAboutSquare(x,y);
 			forEachUnknownUnmarkedNeighbor(x, y, null, (nx, ny) -> fact.points.add(new Point(nx, ny)));
-		} catch (Exception e) { e.printStackTrace(); }
+		} catch (NoSuchSquareException | ValueUnknownException e) {
+			LOGGER.log(Level.FINE, "Error building fact for square ({0},{1})", new Object[]{x, y});
+		}
 		if (fact.numInPoints > 0) facts.add(fact);
 	}
 
@@ -284,8 +304,10 @@ public class LogicalAI extends AI implements UserHelper {
 
 				if (changed) changedAtAll = true;
 			} while (changed);
-		} catch (Exception e) {
-			e.printStackTrace();
+		} catch (NoSuchSquareException | ValueUnknownException e) {
+			LOGGER.log(Level.WARNING, "Error during obvious move computation", e);
+		} catch (DeadException e) {
+			LOGGER.log(Level.FINE, "Game ended during obvious move computation", e);
 		}
 		
 		return changedAtAll;
@@ -328,8 +350,8 @@ public class LogicalAI extends AI implements UserHelper {
 					}
 				}
 			}
-		} catch (Exception e) {
-			e.printStackTrace();
+		} catch (NoSuchSquareException e) {
+			LOGGER.log(Level.WARNING, "Invalid square while computing probabilities", e);
 		}
 
 		if (forInternalUse)
