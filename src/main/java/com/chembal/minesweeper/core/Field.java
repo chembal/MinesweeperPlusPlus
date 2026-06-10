@@ -1,7 +1,13 @@
 package com.chembal.minesweeper.core;
+
+import java.security.SecureRandom;
 import java.util.Random;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Field {
+
+	private static final Logger LOGGER = Logger.getLogger(Field.class.getName());
 
 	private Square field[][] = null;
 	
@@ -15,7 +21,53 @@ public class Field {
 	private boolean started = false;
 	private boolean autoDumpField = false;
 	private long forcedDelay = 0;
-	
+
+	// --- Functional interfaces for neighbor iteration ---
+
+	@FunctionalInterface
+	public interface SquareAction {
+		void apply(int x, int y);
+	}
+
+	@FunctionalInterface
+	public interface SquarePredicate {
+		boolean test(int x, int y);
+	}
+
+	// --- Shared utility methods ---
+
+	public void forEachNeighbor(int x, int y, SquareAction action) {
+		for (int xoffset = -1; xoffset <= 1; xoffset++)
+			for (int yoffset = -1; yoffset <= 1; yoffset++) {
+				int nx = x + xoffset;
+				int ny = y + yoffset;
+				if (squareExists(nx, ny))
+					action.apply(nx, ny);
+			}
+	}
+
+	public int countNeighbors(int x, int y, SquarePredicate predicate) {
+		int[] count = {0};
+		forEachNeighbor(x, y, (nx, ny) -> {
+			if (predicate.test(nx, ny)) count[0]++;
+		});
+		return count[0];
+	}
+
+	private void validateSquare(int x, int y) throws NoSuchSquareException {
+		if (!squareExists(x, y)) throw new NoSuchSquareException();
+	}
+
+	private void validateAlive() throws DeadException {
+		if (!alive) throw new DeadException();
+	}
+
+	private void notifyListener() {
+		if (listener != null) listener.boardChanged();
+	}
+
+	// --- Constructors ---
+
 	public Field() { resetField(); }
 	public Field(int width, int height) { this(width, height, false); }
 	public Field(int width, int height, boolean coastalDefenseSystem) { 
@@ -68,8 +120,7 @@ public class Field {
 			}
 		}
 		
-		// Let those that care know about this.
-		if (listener != null) listener.boardChanged();
+		notifyListener();
 	}
 	public void resetField(boolean[][] fieldMap) {
 		// Reset field, using the supplied map.
@@ -86,15 +137,13 @@ public class Field {
 				}
 			}
 
-		// Let those that care know about this.
-		if (listener != null) listener.boardChanged();
+		notifyListener();
 	}
 
 	public boolean isStarted() { return started; }
 
 	private void placeMine() {
-		// Don't collide with other randomizers.
-		Random r = new Random((long) (System.currentTimeMillis() / 37));
+		Random r = new SecureRandom();
 		boolean placed = false;
 		int x;
 		int y;
@@ -115,25 +164,18 @@ public class Field {
 	}
 
 	public void guess(int x, int y) throws NoSuchSquareException, DeadException {
-		if (!alive) {
-			throw new DeadException();
+		validateAlive();
+		started = true;
+		validateSquare(x, y);
+		field[x][y].setKnown(true);
+		if (field[x][y].isMined()) {
+			alive = false;
 		} else {
-			started = true;
-			if (squareExists(x,y)) {
-				field[x][y].setKnown(true);
-				if (field[x][y].isMined()) {
-					alive = false;
-				} else {
-					sweepField();
-				}
-			} else {
-				throw new NoSuchSquareException();
-			}
+			sweepField();
 		}
 		if (autoDumpField) printDebug();
 
-		// Let those that care know about this.
-		if (listener != null) listener.boardChanged();
+		notifyListener();
 
 		if (isWon() || !isAlive()) started = false;
 	}
@@ -141,21 +183,21 @@ public class Field {
 	public void mark(int x, int y) throws NoSuchSquareException, DeadException { mark(x,y,true); }
 	public void unmark(int x, int y) throws NoSuchSquareException, DeadException { mark(x,y,false); }
 	private void mark(int x, int y, boolean value) throws NoSuchSquareException, DeadException {
-		if (!alive) {
-			throw new DeadException();
-		} else {
-			started = true;
-			if (squareExists(x,y)) {
-				field[x][y].setMarked(value);
-			} else {
-				throw new NoSuchSquareException();
+		validateAlive();
+		started = true;
+		validateSquare(x, y);
+		field[x][y].setMarked(value);
+		if (autoDumpField) printDebug();
+		if (forcedDelay > 0) {
+			try {
+				Thread.sleep(forcedDelay);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				LOGGER.log(Level.FINE, "Mark delay interrupted", e);
 			}
 		}
-		if (autoDumpField) printDebug();
-		if (forcedDelay > 0) { try { Thread.sleep(forcedDelay); } catch (Exception e) {} }
 
-		// Let those that care know about this.
-		if (listener != null) listener.boardChanged();
+		notifyListener();
 
 		if (isWon() || !isAlive()) started = false;
 	}
@@ -193,17 +235,13 @@ public class Field {
 	}
 	
 	public boolean isMarked(int x, int y) throws NoSuchSquareException {
-		if (squareExists(x,y))
-			return field[x][y].isMarked();
-		else
-			throw new NoSuchSquareException();
+		validateSquare(x, y);
+		return field[x][y].isMarked();
 	}
 	
 	public boolean isKnown(int x, int y) throws NoSuchSquareException {
-		if (squareExists(x,y))
-			return field[x][y].isKnown();
-		else
-			throw new NoSuchSquareException();
+		validateSquare(x, y);
+		return field[x][y].isKnown();
 	}
 	
 	public boolean isWon() {
@@ -216,73 +254,45 @@ public class Field {
 	}
 	
 	public boolean isMined(int x, int y) throws NoSuchSquareException, ValueUnknownException {
-		if (squareExists(x,y)) {
-			if (field[x][y].isKnown() || !alive)
-				return field[x][y].isMined();
-			else
-				throw new ValueUnknownException();
-		} else {
-			throw new NoSuchSquareException();
-		}
+		validateSquare(x, y);
+		if (field[x][y].isKnown() || !alive)
+			return field[x][y].isMined();
+		else
+			throw new ValueUnknownException();
 	}
 	
 	public int getNumberMinedAboutSquare(int x, int y) throws NoSuchSquareException, ValueUnknownException {
 		return getNumberMinedAboutSquare(x,y,false);
 	}
 	private int getNumberMinedAboutSquare(int x, int y, boolean bypassSecurity) throws NoSuchSquareException, ValueUnknownException { 
-		int count = 0;
-		
-		if (!squareExists(x,y))
-			throw new NoSuchSquareException();
-		else if (!field[x][y].isKnown() && !bypassSecurity && isAlive())
+		validateSquare(x, y);
+		if (!field[x][y].isKnown() && !bypassSecurity && isAlive())
 			throw new ValueUnknownException();
-		else {
-			for (int xoffset = -1; xoffset <= 1; xoffset++)
-				for (int yoffset = -1; yoffset <= 1; yoffset++) {
-					if (squareExists((x + xoffset),(y + yoffset))) {
-						 if (field[x + xoffset][y + yoffset].isMined()) count++;
-					}
-				}
-			return count;
-		}
+		return countNeighbors(x, y, (nx, ny) -> field[nx][ny].isMined());
 	}
 	
 	public int getNumberMarkedAboutSquare(int x, int y) throws NoSuchSquareException { 
-		int count = 0;
-		
-		if (!squareExists(x,y)) {
-			throw new NoSuchSquareException();
-		} else {		
-			for (int xoffset = -1; xoffset <= 1; xoffset++)
-				for (int yoffset = -1; yoffset <= 1; yoffset++) {
-					if (squareExists((x + xoffset),(y + yoffset))) {
-						 if (field[x + xoffset][y + yoffset].isMarked()) count++;
-					}
-				}
-			return count;
-		}
+		validateSquare(x, y);
+		return countNeighbors(x, y, (nx, ny) -> field[nx][ny].isMarked());
 	}
 	
 	public boolean markAllAroundSquare(int x, int y) throws NoSuchSquareException, DeadException {
+		validateSquare(x, y);
 		boolean changed = false;
-
-		if (!squareExists(x,y)) {
-			throw new NoSuchSquareException();
-		} else {
-			for (int xoffset = -1; xoffset <= 1; xoffset++)
-				for (int yoffset = -1; yoffset <= 1; yoffset++) {
-					if (squareExists((x + xoffset),(y + yoffset)) && !field[x + xoffset][y + yoffset].isKnown()) {
-						if (!field[x + xoffset][y + yoffset].isMarked()) {
-							mark(x + xoffset,y + yoffset);
-							changed = true;
-						}
+		for (int xoffset = -1; xoffset <= 1; xoffset++)
+			for (int yoffset = -1; yoffset <= 1; yoffset++) {
+				int nx = x + xoffset;
+				int ny = y + yoffset;
+				if (squareExists(nx, ny) && !field[nx][ny].isKnown()) {
+					if (!field[nx][ny].isMarked()) {
+						mark(nx, ny);
+						changed = true;
 					}
 				}
-			return changed;
-		}
+			}
+		return changed;
 	}
 
-	@SuppressWarnings("finally")
 	public boolean testAssumptions(int x, int y) throws NoSuchSquareException {
 		boolean changed = false;
 		
@@ -290,49 +300,36 @@ public class Field {
 			if (getNumberMinedAboutSquare(x,y) == (getNumberMarkedAboutSquare(x,y))) {
 				for (int xoffset = -1; xoffset <= 1; xoffset++)
 					for (int yoffset = -1; yoffset <= 1; yoffset++) {
-						if (squareExists((x + xoffset),(y + yoffset)) && !field[x + xoffset][y + yoffset].isKnown() && !field[x + xoffset][y + yoffset].isMarked()) {
-								guess(x + xoffset,y + yoffset);
-								changed = true;
+						int nx = x + xoffset;
+						int ny = y + yoffset;
+						if (squareExists(nx, ny) && !field[nx][ny].isKnown() && !field[nx][ny].isMarked()) {
+							guess(nx, ny);
+							changed = true;
 						}
 					}
 			}
 		} catch (ValueUnknownException e) {
-		} finally {
-			return changed;
+			LOGGER.log(Level.FINE, "Value unknown during assumption test at ({0},{1})", new Object[]{x, y});
+		} catch (DeadException e) {
+			LOGGER.log(Level.FINE, "Game ended during assumption test at ({0},{1})", new Object[]{x, y});
 		}
+		return changed;
 	}
 
 	public int getNumberUnknownAboutSquare(int x, int y) throws NoSuchSquareException { 
-		int count = 0;
-		
-		if (!squareExists(x,y)) {
-			throw new NoSuchSquareException();
-		} else {
-			for (int xoffset = -1; xoffset <= 1; xoffset++)
-				for (int yoffset = -1; yoffset <= 1; yoffset++) {
-					if (squareExists((x + xoffset),(y + yoffset))) {
-						 if (!field[x + xoffset][y + yoffset].isKnown()) count++;
-					}
-				}
-			return count;
-		}
+		validateSquare(x, y);
+		return countNeighbors(x, y, (nx, ny) -> !field[nx][ny].isKnown());
 	}
 
-	// Returns true if anything changed.
 	private boolean setKnownAboutSquare(int x, int y) {
-		boolean changed = false;
-		
-		for (int xoffset = -1; xoffset <= 1; xoffset++)
-			for (int yoffset = -1; yoffset <= 1; yoffset++) {
-				if (squareExists((x + xoffset),(y + yoffset))) {
-					if (!(field[x + xoffset][y + yoffset].isKnown())) {
-						field[x + xoffset][y + yoffset].setKnown(true);
-						changed = true;
-					}
-				}
+		boolean[] changed = {false};
+		forEachNeighbor(x, y, (nx, ny) -> {
+			if (!field[nx][ny].isKnown()) {
+				field[nx][ny].setKnown(true);
+				changed[0] = true;
 			}
-		
-		return changed;
+		});
+		return changed[0];
 	}
 
 	public void sweepField() { 
@@ -346,8 +343,10 @@ public class Field {
 						if (field[x][y].isKnown() && getNumberMinedAboutSquare(x,y) == 0)
 							if (setKnownAboutSquare(x,y)) changed = true;
 			} while (changed);
-		} catch (Exception e) {
-			e.printStackTrace();
+		} catch (NoSuchSquareException e) {
+			LOGGER.log(Level.WARNING, "Unexpected invalid square during field sweep", e);
+		} catch (ValueUnknownException e) {
+			LOGGER.log(Level.WARNING, "Unexpected unknown value during field sweep", e);
 		}
 	}
 
@@ -373,8 +372,8 @@ public class Field {
 				}
 				out.append("\n");
 			}
-		} catch (Exception e) {
-			e.printStackTrace();
+		} catch (NoSuchSquareException | ValueUnknownException e) {
+			LOGGER.log(Level.WARNING, "Error generating field string representation", e);
 		}
 		
 		if (revealAll) alive = false; // No cheaters!

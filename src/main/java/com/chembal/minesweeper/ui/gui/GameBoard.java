@@ -2,16 +2,21 @@ package com.chembal.minesweeper.ui.gui;
 
 import com.chembal.minesweeper.core.Field;
 import com.chembal.minesweeper.core.NoSuchSquareException;
+import com.chembal.minesweeper.core.ValueUnknownException;
 
 import java.awt.Dimension;
 import java.awt.GridLayout;
 import java.awt.Point;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.swing.JPanel;
 
 public class GameBoard extends JPanel implements MouseListener {
+
+	private static final Logger LOGGER = Logger.getLogger(GameBoard.class.getName());
 	
 	private GameSquare[][] field;
 	private GameBoardListener listener = null;
@@ -76,7 +81,11 @@ public class GameBoard extends JPanel implements MouseListener {
 					}
 				}
 			}
-		} catch (Exception e) { e.printStackTrace(); }
+		} catch (NoSuchSquareException e) {
+			LOGGER.log(Level.WARNING, "Invalid square encountered while updating board", e);
+		} catch (ValueUnknownException e) {
+			LOGGER.log(Level.WARNING, "Unknown value encountered while updating board", e);
+		}
 		
 		setVisible(true);
 	}
@@ -107,7 +116,8 @@ public class GameBoard extends JPanel implements MouseListener {
 				}
 			}
 		} catch (NoSuchSquareException ex) {
-		}	
+			LOGGER.log(Level.FINE, "Click on non-existent square", ex);
+		}
 	}
 	public void mouseReleased(MouseEvent e) {}
 }

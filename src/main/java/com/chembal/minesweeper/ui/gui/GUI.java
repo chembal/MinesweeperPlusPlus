@@ -16,6 +16,8 @@ import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.text.DecimalFormat;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.swing.ButtonGroup;
 import javax.swing.JButton;
@@ -32,6 +34,8 @@ import javax.swing.JRadioButtonMenuItem;
 import javax.swing.border.EmptyBorder;
 
 public class GUI extends JFrame implements ActionListener, FieldListener, GameBoardListener {
+
+	private static final Logger LOGGER = Logger.getLogger(GUI.class.getName());
 
 	JPanel   	infoBar			= new JPanel();
 	JLabel   	infoMines		= new JLabel("99 Mines");
@@ -278,7 +282,11 @@ public class GUI extends JFrame implements ActionListener, FieldListener, GameBo
 	
 	public void requestGuess(Point p) {
 		if (!(field.isWon() || !field.isAlive())) {
-			try { if (field.isAlive()) guess(p.x,p.y); } catch (Exception e) {}
+			try {
+				if (field.isAlive()) guess(p.x,p.y);
+			} catch (Exception e) {
+				LOGGER.log(Level.WARNING, "Error processing guess at ({0},{1})", new Object[]{p.x, p.y});
+			}
 			commentOnResult();
 		}
 	}
@@ -293,14 +301,14 @@ public class GUI extends JFrame implements ActionListener, FieldListener, GameBo
 					} else {
 						field.mark(p.x,p.y);
 					}
-					int helpLevel = props.getHelpLevel();
-					if (helpLevel == 1) testAllAssumptions();
-					if (helpLevel == 2) ai.doObvious();
-					if (helpLevel == 3) { field.setForcedDelay(0); ai.play(true); }
+					applyAIHelp();
 					noUpdateBoard = false;
 					boardChanged();
 				}
-			} catch (Exception e) {}
+			} catch (Exception e) {
+				LOGGER.log(Level.WARNING, "Error processing mark at ({0},{1})", new Object[]{p.x, p.y});
+				noUpdateBoard = false;
+			}
 			commentOnResult();
 		}
 	}
@@ -308,7 +316,11 @@ public class GUI extends JFrame implements ActionListener, FieldListener, GameBo
 	public void requestCheck(Point p) {
 		if (!(field.isWon() || !field.isAlive())) {
 			noUpdateBoard = true;
-			try { if (field.isAlive()) field.testAssumptions(p.x,p.y); } catch (Exception e) {}
+			try {
+				if (field.isAlive()) field.testAssumptions(p.x,p.y);
+			} catch (Exception e) {
+				LOGGER.log(Level.WARNING, "Error testing assumptions at ({0},{1})", new Object[]{p.x, p.y});
+			}
 			noUpdateBoard = false;
 			boardChanged();
 		}
@@ -318,13 +330,20 @@ public class GUI extends JFrame implements ActionListener, FieldListener, GameBo
 		try {
 			noUpdateBoard = true;
 			field.guess(x,y);
-			int helpLevel = props.getHelpLevel();
-			if (helpLevel == 1) testAllAssumptions();
-			if (helpLevel == 2) ai.doObvious();
-			if (helpLevel == 3) { field.setForcedDelay(0); ai.play(true); }
+			applyAIHelp();
 			noUpdateBoard = false;
 			boardChanged();
-		} catch (Exception e) {}
+		} catch (Exception e) {
+			LOGGER.log(Level.WARNING, "Error during guess at ({0},{1})", new Object[]{x, y});
+			noUpdateBoard = false;
+		}
+	}
+
+	private void applyAIHelp() {
+		int helpLevel = props.getHelpLevel();
+		if (helpLevel == 1) testAllAssumptions();
+		if (helpLevel == 2) ai.doObvious();
+		if (helpLevel == 3) { field.setForcedDelay(0); ai.play(true); }
 	}
 	
 	private void testAllAssumptions() {
@@ -343,7 +362,9 @@ public class GUI extends JFrame implements ActionListener, FieldListener, GameBo
 					}
 				}
 			} while (changed);
-		} catch (Exception e) { e.printStackTrace(); }
+		} catch (Exception e) {
+			LOGGER.log(Level.WARNING, "Error while testing all assumptions", e);
+		}
 	}
 	
 	public void actionPerformed(ActionEvent e) {
