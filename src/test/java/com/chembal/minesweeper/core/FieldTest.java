@@ -389,10 +389,9 @@ class FieldTest {
     }
 
     @Test
-    void testAssumptionsOutOfBoundsReturnsFalse() throws Exception {
+    void testAssumptionsOutOfBoundsThrows() {
         Field f = new Field(3, 3, 0);
-        // testAssumptions suppresses exceptions via finally block
-        assertFalse(f.testAssumptions(5, 5));
+        assertThrows(NoSuchSquareException.class, () -> f.testAssumptions(5, 5));
     }
 
     // ---- resetField ----
