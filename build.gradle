@@ -25,13 +25,19 @@ jar {
 }
 
 publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifactId = 'minesweeper-plus-plus'
+        }
+    }
     repositories {
         maven {
             name = "GitHubPackages"
-            url = "https://maven.pkg.github.com/chembal/minesweeper-plus-plus"
+            url = "https://maven.pkg.github.com/chembal/MinesweeperPlusPlus"
             credentials {
-                username = System.getenv("github.actor")
-                password = System.getenv("secrets.GITHUB_TOKEN")
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
             }
         }
     }
