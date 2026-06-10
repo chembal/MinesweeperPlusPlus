@@ -1,10 +1,17 @@
 package com.chembal.minesweeper.ai;
 
+import com.chembal.minesweeper.core.DeadException;
 import com.chembal.minesweeper.core.Field;
+import com.chembal.minesweeper.core.NoSuchSquareException;
 
 import java.util.Random;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public abstract class AI {
+
+	private static final Logger LOGGER = Logger.getLogger(AI.class.getName());
+
 	protected Field field;
 	protected Random random = new Random();
 
@@ -41,8 +48,10 @@ public abstract class AI {
 				y = random.nextInt(field.getHeight());
 			} while (!field.squareExists(x,y) || field.isMarked(x,y) || field.isKnown(x,y));
 			field.guess(x,y);
-		} catch (Exception e) {
-			e.printStackTrace();
+		} catch (NoSuchSquareException e) {
+			LOGGER.log(Level.WARNING, "Random guess targeted non-existent square", e);
+		} catch (DeadException e) {
+			LOGGER.log(Level.FINE, "Random guess attempted on dead field", e);
 		}
 	}
 }

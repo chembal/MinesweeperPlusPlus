@@ -1,8 +1,13 @@
 package com.chembal.minesweeper.core;
+
 import java.security.SecureRandom;
 import java.util.Random;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Field {
+
+	private static final Logger LOGGER = Logger.getLogger(Field.class.getName());
 
 	private Square field[][] = null;
 	
@@ -183,7 +188,14 @@ public class Field {
 		validateSquare(x, y);
 		field[x][y].setMarked(value);
 		if (autoDumpField) printDebug();
-		if (forcedDelay > 0) { try { Thread.sleep(forcedDelay); } catch (Exception e) {} }
+		if (forcedDelay > 0) {
+			try {
+				Thread.sleep(forcedDelay);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				LOGGER.log(Level.FINE, "Mark delay interrupted", e);
+			}
+		}
 
 		notifyListener();
 
@@ -281,7 +293,6 @@ public class Field {
 		return changed;
 	}
 
-	@SuppressWarnings("finally")
 	public boolean testAssumptions(int x, int y) throws NoSuchSquareException {
 		boolean changed = false;
 		
@@ -298,9 +309,11 @@ public class Field {
 					}
 			}
 		} catch (ValueUnknownException e) {
-		} finally {
-			return changed;
+			LOGGER.log(Level.FINE, "Value unknown during assumption test at ({0},{1})", new Object[]{x, y});
+		} catch (DeadException e) {
+			LOGGER.log(Level.FINE, "Game ended during assumption test at ({0},{1})", new Object[]{x, y});
 		}
+		return changed;
 	}
 
 	public int getNumberUnknownAboutSquare(int x, int y) throws NoSuchSquareException { 
@@ -330,8 +343,10 @@ public class Field {
 						if (field[x][y].isKnown() && getNumberMinedAboutSquare(x,y) == 0)
 							if (setKnownAboutSquare(x,y)) changed = true;
 			} while (changed);
-		} catch (Exception e) {
-			e.printStackTrace();
+		} catch (NoSuchSquareException e) {
+			LOGGER.log(Level.WARNING, "Unexpected invalid square during field sweep", e);
+		} catch (ValueUnknownException e) {
+			LOGGER.log(Level.WARNING, "Unexpected unknown value during field sweep", e);
 		}
 	}
 
@@ -357,8 +372,8 @@ public class Field {
 				}
 				out.append("\n");
 			}
-		} catch (Exception e) {
-			e.printStackTrace();
+		} catch (NoSuchSquareException | ValueUnknownException e) {
+			LOGGER.log(Level.WARNING, "Error generating field string representation", e);
 		}
 		
 		if (revealAll) alive = false; // No cheaters!
